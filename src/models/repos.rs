@@ -36,8 +36,12 @@ pub struct RepoCommit {
     pub html_url: String,
     pub comments_url: String,
     pub commit: RepoCommitPage,
-    pub author: Option<Author>,
-    pub committer: Option<Author>,
+
+    #[serde(deserialize_with = "deserialize_commit_author")]
+    pub author: Option<CommitAuthor>,
+    #[serde(deserialize_with = "deserialize_commit_author")]
+    pub committer: Option<CommitAuthor>,
+
     pub parents: Vec<Commit>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -45,6 +49,26 @@ pub struct RepoCommit {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<DiffEntry>>,
+}
+
+/// The API can serve authors with no valid fields, which then results in a serde error.
+/// Here we attempt parsing the commit author, but fall back to `None` if it fails.
+fn deserialize_commit_author<'de, D>(deserializer: D) -> Result<Option<CommitAuthor>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum MaybeAuthor {
+        Valid(CommitAuthor),
+        Empty {},
+    }
+
+    let val = <Option<MaybeAuthor> as serde::de::Deserialize>::deserialize(deserializer)?;
+    match val {
+        Some(MaybeAuthor::Valid(author)) => Ok(Some(author)),
+        Some(MaybeAuthor::Empty {}) | None => Ok(None),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
